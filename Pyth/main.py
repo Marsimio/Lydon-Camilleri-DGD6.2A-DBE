@@ -22,8 +22,14 @@ async def read_root():
 # POST route to upload sprites
 @app.post("/sprites")
 async def upload_sprite(file: UploadFile = File(...)):
-    db = get_db()
+    if file.content_type not in ["image/png", "image/jpeg"]:
+        raise HTTPException(status_code=400, detail="Only PNG and JPG images are allowed.")
+    
     content = await file.read() # Reads binary content
+    if len(content) > 2 * 1024 * 1024: # Limit to 2MB
+        raise HTTPException(status_code=400, detail="Image file too large (max 2MB).")
+
+    db = get_db()
     sprite_doc = {"filename": file.filename, "content": content} # Formats data into entry
     result = await db.sprites.insert_one(sprite_doc) # Inserts entry into table
     return {"message": "Sprite uploaded", "id": str(result.inserted_id)} # Confirms POST request
@@ -31,8 +37,14 @@ async def upload_sprite(file: UploadFile = File(...)):
 # POST route to upload audio files
 @app.post("/audio")
 async def upload_audio(file: UploadFile = File(...)):
-    db = get_db()
+    if file.content_type not in ["audio/mpeg", "audio/wav"]:
+        raise HTTPException(status_code=400, detail="Only MP3 or WAV files are allowed.")
+    
     content = await file.read()
+    if len(content) > 5 * 1024 * 1024: # Limit to 5MB
+        raise HTTPException(status_code=400, detail="Audio file too large (max 5MB).")
+
+    db = get_db()
     audio_doc = {"filename": file.filename, "content": content}
     result = await db.audio.insert_one(audio_doc)
     return {"message": "Audio file uploaded", "id": str(result.inserted_id)}
@@ -50,7 +62,7 @@ async def add_score(score: PlayerScore):
 async def get_sprites():
     db = get_db()
     sprites = [] # Contains entries to be printed
-    async for sprite in db.sprites.find({}, {"content": 0}):  # Finds all entries, Exclude binary field
+    async for sprite in db.sprites.find({}, {"content": 0}): # Finds all entries, Exclude binary field
         sprite["_id"] = str(sprite["_id"]) # Convert _id to string
         sprites.append(sprite) # Appends entry to be printed
     return {"sprites": sprites}
