@@ -7,7 +7,7 @@ app = FastAPI()
 # Connect to Mongo Atlas
 def get_db():
     client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://lydoncamilleri05:username@lydoncluster.an0c0vd.mongodb.net/?retryWrites=true&w=majority&appName=LydonCluster")
-    return client[client.multimedia_db]
+    return client["multimedia_db"]
 
 
 class PlayerScore(BaseModel):
@@ -17,7 +17,6 @@ class PlayerScore(BaseModel):
 # Root route 
 @app.get("/")
 async def read_root():
-    db = get_db()
     return {"message": "Welcome to the API!"}
 
 # POST route to upload sprites
