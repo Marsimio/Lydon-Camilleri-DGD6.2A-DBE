@@ -1,0 +1,68 @@
+from fastapi import FastAPI, File, UploadFile, HTTPException
+from pydantic import BaseModel
+import motor.motor_asyncio
+
+app = FastAPI()
+
+# Connect to Mongo Atlas
+client = motor.motor_asyncio.AsyncIOMotorClient("mongodb+srv://lydoncamilleri05:username@lydoncluster.an0c0vd.mongodb.net/?retryWrites=true&w=majority&appName=LydonCluster")
+db = client.multimedia_db
+
+class PlayerScore(BaseModel):
+    player_name: str
+    score: int
+
+# Root route 
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the API!"}
+
+# POST route to upload sprites
+@app.post("/sprites")
+async def upload_sprite(file: UploadFile = File(...)):
+    content = await file.read() # Reads binary content
+    sprite_doc = {"filename": file.filename, "content": content} # Formats data into entry
+    result = await db.sprites.insert_one(sprite_doc) # Inserts entry into table
+    return {"message": "Sprite uploaded", "id": str(result.inserted_id)} # Confirms POST request
+
+# POST route to upload audio files
+@app.post("/audio")
+async def upload_audio(file: UploadFile = File(...)):
+    content = await file.read()
+    audio_doc = {"filename": file.filename, "content": content}
+    result = await db.audio.insert_one(audio_doc)
+    return {"message": "Audio file uploaded", "id": str(result.inserted_id)}
+
+# POST route to add player scores
+@app.post("/scores")
+async def add_score(score: PlayerScore):
+    score_doc = score.dict() 
+    result = await db.scores.insert_one(score_doc)
+    return {"message": "Score recorded", "id": str(result.inserted_id)}
+
+# GET route to retrieve sprites
+@app.get("/sprites")
+async def get_sprites():
+    sprites = [] # Contains entries to be printed
+    async for sprite in db.sprites.find({}, {"content": 0}):  # Finds all entries, Exclude binary field
+        sprite["_id"] = str(sprite["_id"]) # Convert _id to string
+        sprites.append(sprite) # Appends entry to be printed
+    return {"sprites": sprites}
+
+# GET route to retrieve audios
+@app.get("/audio")
+async def get_audio():
+    audio_files = []
+    async for audio in db.audio.find({}, {"content": 0}):
+        audio["_id"] = str(audio["_id"])
+        audio_files.append(audio)
+    return {"audio_files": audio_files}
+
+# GET route to retrieve player scores
+@app.get("/scores")
+async def get_scores():
+    scores = []
+    async for score in db.scores.find():
+        score["_id"] = str(score["_id"])  
+        scores.append(score)
+    return {"scores": scores}
