@@ -1,5 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from pydantic import BaseModel
+from bson import ObjectId
 import motor.motor_asyncio
 
 app = FastAPI()
@@ -22,7 +23,7 @@ async def read_root():
 # POST route to upload sprites
 @app.post("/sprites")
 async def upload_sprite(file: UploadFile = File(...)):
-    if file.content_type not in ["image/png", "image/jpeg"]:
+    if file.content_type not in ["image/png", "image/jpeg"]: # File Extennsion validation
         raise HTTPException(status_code=400, detail="Only PNG and JPG images are allowed.")
     
     content = await file.read() # Reads binary content
@@ -57,6 +58,7 @@ async def add_score(score: PlayerScore):
     result = await db.scores.insert_one(score_doc)
     return {"message": "Score recorded", "id": str(result.inserted_id)}
 
+
 # GET route to retrieve sprites
 @app.get("/sprites")
 async def get_sprites():
@@ -86,3 +88,82 @@ async def get_scores():
         score["_id"] = str(score["_id"])  
         scores.append(score)
     return {"scores": scores}
+
+
+# PUT route to replace/update sprites
+@app.put("/sprites/{sprite_id}")
+async def update_sprite(sprite_id: str, file: UploadFile = File(...)):
+    if file.content_type not in ["image/png", "image/jpeg"]: # File Extension validation
+        raise HTTPException(status_code=400, detail="Only PNG and JPG images are allowed.")
+    
+    content = await file.read()
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image file too large (max 2MB).") # Limit to 2MB
+
+    db = get_db()
+    result = await db.sprites.update_one(
+        {"_id": ObjectId(sprite_id)}, # Updates entry with given ID
+        {"$set": {"filename": file.filename, "content": content}} # using uploaded file
+    )
+    if result.matched_count == 0: # Validates if entry has been found to be changed
+        raise HTTPException(status_code=404, detail="Sprite not found")
+    return {"message": "Sprite updated"}
+
+# PUT route to replace/update audio
+@app.put("/audio/{audio_id}")
+async def update_audio(audio_id: str, file: UploadFile = File(...)):
+    if file.content_type not in ["audio/mpeg", "audio/wav"]:
+        raise HTTPException(status_code=400, detail="Only MP3 or WAV files are allowed.")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Audio file too large (max 5MB).")
+
+    db = get_db()
+    result = await db.audio.update_one(
+        {"_id": ObjectId(audio_id)},
+        {"$set": {"filename": file.filename, "content": content}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return {"message": "Audio file updated"}
+
+# PUT route to replace/update score
+@app.put("/scores/{score_id}")
+async def update_score(score_id: str, score: PlayerScore):
+    db = get_db()
+    result = await db.scores.update_one(
+        {"_id": ObjectId(score_id)},
+        {"$set": score.dict()}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Score not found")
+    return {"message": "Score updated"}
+
+
+# DELETE route to remove sprites
+@app.delete("/sprites/{sprite_id}")
+async def delete_sprite(sprite_id: str):
+    db = get_db()
+    result = await db.sprites.delete_one({"_id": ObjectId(sprite_id)}) # Delete entry with a given ID
+    if result.deleted_count == 0: # Validate a score has been removed
+        raise HTTPException(status_code=404, detail="Sprite not found") 
+    return {"message": "Sprite deleted"}
+
+# DELETE route to remove audio
+@app.delete("/audio/{audio_id}")
+async def delete_audio(audio_id: str):
+    db = get_db()
+    result = await db.audio.delete_one({"_id": ObjectId(audio_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Audio file not found")
+    return {"message": "Audio file deleted"}
+
+# DELETE route to remove score
+@app.delete("/scores/{score_id}")
+async def delete_score(score_id: str):
+    db = get_db()
+    result = await db.scores.delete_one({"_id": ObjectId(score_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Score not found")
+    return {"message": "Score deleted"}
